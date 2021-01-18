@@ -1,0 +1,13 @@
+.gitignore
+.npmignore
+npm-debug.log
+__tests__/
+node_modules/
+src/
+.eslintrc
+babel.config.js
+webpack.*
+documentation.yml
+*.tgz
+*.sh
+.DS_Store

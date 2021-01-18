@@ -1,0 +1,56 @@
+{
+  "env": {
+      "browser": true,
+      "es6": true
+  },
+  "extends": [
+      "eslint:recommended",
+      "plugin:import/errors",
+      "plugin:import/warnings"
+  ],
+  "parser": "babel-eslint",
+  "parserOptions": {
+      "ecmaVersion": 2019,
+      "sourceType": "module",
+      "ecmaFeatures": {
+          "experimentalObjectRestSpread": true
+      }
+  },
+  "plugins": [
+      "import"
+  ],
+  "rules": {
+      "array-bracket-spacing": ["warn", "never", { "arraysInArrays": true, "objectsInArrays": true }],
+      "arrow-parens": "off",
+      "block-spacing": "off",
+      "brace-style": ["warn", "stroustrup", { "allowSingleLine": true } ],
+      "comma-dangle": "off",
+      "curly": "off",
+      "guard-for-in": "off",
+      "indent": [ "warn", 2,
+          { "VariableDeclarator": 2 } ],
+      "key-spacing": "off",
+      "linebreak-style": [
+          "error",
+          "unix"
+      ],
+      "max-len": "off",
+      "new-cap": [ "warn", { "capIsNewExceptions": ["Polymer"] }],
+      "no-multi-spaces": [ "warn" ],
+      "no-prototype-builtins": "off",
+      "no-trailing-spaces": [ "warn" ],
+      "no-unused-vars": [ "warn", { "vars": "all", "args": "none" } ],
+      "object-curly-spacing": "off",
+      "one-var": "off",
+      "padded-blocks": "off",
+      "prefer-const": "off",
+      "quotes": "off",
+      "require-await": [ "warn" ],
+      "require-jsdoc": "off",
+      "semi": [
+          "error",
+          "never"
+      ],
+      "valid-jsdoc": [ "warn", { "requireReturn": false } ]
+  }
+}
