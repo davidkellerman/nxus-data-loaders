@@ -21,7 +21,7 @@ const errorStateBit = 2
  * because the data may be large). Instead, it passes loaded data to a
  * data processing function to transform or store it.
  *
- * ###### Response format
+ * #### Response format
  *
  * The response to the data request consists of a sequence of
  * NDJSON-encoded objects:
@@ -38,13 +38,12 @@ const errorStateBit = 2
  *     *   object - the data object itself; `null` if the response is an
  *         update and the object has been deleted
  *
- * ###### Data processing function
+ * #### Data processing function
  *
  * The loader is configured with a `processor` function to store or
  * otherwise transform the loaded data. It has the signature:
- *     ```
  *     processor(objects, update)
- *     ```
+ *
  * It is passed these parameters:
  * *   `objects` **object** - an associative array containing the
  *     loaded data objects; keys are assigned from the key entry of the
