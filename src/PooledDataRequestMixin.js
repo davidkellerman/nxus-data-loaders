@@ -118,11 +118,28 @@ class PooledRequest {
  * activity events. This also means it defers data requests until the
  * element is connected and cancels any active requests when
  * disconnected.
+ *
+ * #### Request activity state
+ *
+ * The mixin tracks request activity state. The state is updated when
+ * the data request is queued for processing, when it becomes active,
+ * and when it is released on completion. Client code may report other
+ * state changes, such as intermediate activity states, using the
+ * `updateDataRequestActivity()` method.
+ *
+ * If configured with an `activityEvent`, the mixin will emit events to
+ * indicate changes in activity state. The event type is specified by
+ * `activityEvent`; the event `detail` property contains a `name`
+ * subproperty set from the mixin `name`, and an `activity` subproperty
+ * that indicates activity state. Client code may supply additional
+ * subproperties.
+ *
  */
 const PooledDataRequestMixin = dedupeMixin((base) => class extends base {
 
   constructor() {
     super()
+    this.name = 'data-request'
     this.activityEvent = 'activity-changed'
     this.__dataRequest = undefined
     this.__dataRequestActivity = undefined
@@ -130,7 +147,12 @@ const PooledDataRequestMixin = dedupeMixin((base) => class extends base {
 
   static get properties() {
     return {
-      /* Activity event.
+      /** Data request name (for display purposes).
+       */
+      name: {
+        type: String },
+      /** Event for reporting data request activity.
+       * The event `detail` will contain `name` and `status` properties.
        */
       activityEvent: {
         type: String,

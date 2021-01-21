@@ -9,7 +9,7 @@
     "postversion": "npm run build-docs && git push && git push --tags",
     "test": "jest --no-cache --verbose --runInBand --forceExit",
     "test:debug": "DEBUG_MODE=1 jest --no-cache --verbose --runInBand --forceExit",
-    "pretest": "webpack --config webpack.test.config.js",
+    "pretest": "npm run build && webpack --config webpack.test.config.js",
     "clean": "rimraf dist/*",
     "build": "npm run clean && npm run compile",
     "prepublish": "npm run build",

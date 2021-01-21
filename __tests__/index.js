@@ -38,13 +38,13 @@ Object.defineProperty(window, 'EventSource', {value: EventSourceMock})
 
 import fetchMock from 'fetch-mock/es5/client'
 
-import './dist/index-webpack.js'
+import {DeserializingEntityDataProcessor} from './dist/index-webpack.js'
 
 const dateRE = /^[0-9]{4}-[0-9]{2}-[0-9]{2}T[0-9]{1,2}:[0-9]{2}:[0-9]{2}(\.[0-9]{1,})?Z$/
 
 const responseCreatedAt = '2021-01-01T00:00:00.00Z'
 const responseObjects = {
-  'test.1': {
+  '1': {
     what: 'ever',
     createdAt: expect.stringMatching(dateRE),
     updatedAt: expect.stringMatching(dateRE) }
@@ -56,16 +56,16 @@ async function fetchDataMock(url, options, request) {
   let body = JSON.parse(options.body),
       timestamps = {test: fetchDataMockTimestamp}
   return new Response(
-    responseBody(responseObjects, {timestamps, cutoff: Date.now()}),
+    responseBody(responseObjects, {timestamps, cutoff: Date.now()}, 'test'),
     {status: 200, statusText: 'OK', headers})
 }
 
-function responseBody(objects, header) {
+function responseBody(objects, header, keyPrefix) {
   const encoder = new TextEncoder()
   const updatedAt = new Date(header.cutoff)
   let rows = [], index = 0
   for (let [key, object] of Object.entries(objects))
-    rows.push([key, {...object, createdAt: responseCreatedAt, updatedAt}])
+    rows.push([keyPrefix + '.' + key, {...object, createdAt: responseCreatedAt, updatedAt}])
   rows.unshift({count: rows.length, ...header})
   return new ReadableStream({
     pull(controller) {
@@ -92,6 +92,7 @@ class DataProcessorContext {
     this.results = []
     this.pendingResults = []
     this.processor = this._processor.bind(this)
+    this._dataProcessor = new DeserializingEntityDataProcessor(this, 'test')
   }
   nextResult() {
     let result = this.results.shift()
@@ -101,13 +102,18 @@ class DataProcessorContext {
     }
     return result
   }
-  _processor(objects, update) {
+  assignResult(val) {
     let result = this.pendingResults.shift()
     if (!result) {
       result = new ResultPackage()
       this.results.push(result)
     }
-    result.assign([objects, update])
+    result.assign(val)
+  }
+  async _processor(stream, header) {
+    let processor = this._dataProcessor.streamedDataProcessor
+    await processor(stream, header)
+    this.assignResult([this['test'], header])
   }
 }
 
@@ -153,8 +159,8 @@ describe('streamed-data-loader element', () => {
       element.processor = processorContext.processor
       document.body.appendChild(element)
       let result = processorContext.nextResult(),
-          [objects, update] = await result.promise
-      expect(update).toBeFalsy()
+          [objects, header] = await result.promise
+      expect(header.update).toBeFalsy()
       expect(objects).toEqual(responseObjects)
     })
   })
@@ -196,8 +202,8 @@ jest.setTimeout(60000)
       element.processor = processorContext.processor
       document.body.appendChild(element)
       let result = processorContext.nextResult(),
-          [objects, update] = await result.promise
-      expect(update).toBeFalsy()
+          [objects, header] = await result.promise
+      expect(header.update).toBeFalsy()
       expect(objects).toEqual(responseObjects)
     })
     it('should reload data in response to EventSource event', async () => {
@@ -208,8 +214,8 @@ jest.setTimeout(60000)
           event = new MessageEvent('test/status', {data})
       src.emit(event.type, event)
       let result = processorContext.nextResult(),
-          [objects, update] = await result.promise
-      expect(update).toBeFalsy()
+          [objects, header] = await result.promise
+      expect(header.update).toBeFalsy()
       expect(objects).toEqual(responseObjects)
 
     })

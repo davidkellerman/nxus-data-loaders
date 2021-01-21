@@ -23,7 +23,7 @@ const errorStateBit = 2
  *
  * #### Response format
  *
- * The response to the data request consists of a sequence of
+ * The response to the data request should consist of a sequence of
  * NDJSON-encoded objects:
  * *   header object - contains these properties:
  *     *   `count` **integer** - count of data objects
@@ -42,13 +42,14 @@ const errorStateBit = 2
  *
  * The loader is configured with a `processor` function to store or
  * otherwise transform the loaded data. It has the signature:
- *     processor(objects, update)
+ *     processor(objects, header)
  *
  * It is passed these parameters:
- * *   `objects` **object** - an associative array containing the
- *     loaded data objects; keys are assigned from the key entry of the
- *     response data; deleted object have an `undefined` value
- * *   `update` **boolean** - `true` if the data is an update.
+ * *   `objects` **ReadableStream** - a stream that returns the loaded
+ *     data objects; each object is a two-element array containing the
+ *     object identifier and the object itself (that is, the decoded
+ *     NDJSON rows from the response)
+ * *   `header` **Object** - the decoded header object from the response
  *
  */
 class StreamedDataLoader extends PooledDataRequestMixin(LitElement) {
@@ -57,7 +58,6 @@ class StreamedDataLoader extends PooledDataRequestMixin(LitElement) {
     super()
     this.url = ''
     this.query = {}
-    this.name = 'data-request'
     this.activityEvent = 'activity-changed'
     this.state = unloadedStateBit
     this._requestState = 'idle' // idle, pending, active
@@ -80,17 +80,6 @@ class StreamedDataLoader extends PooledDataRequestMixin(LitElement) {
        */
       query: {
         type: Object },
-
-      /** Data request name (for display purposes).
-       */
-      name: {
-        type: String },
-      /** Event for reporting data request activity.
-       * The event `detail` will contain `name` and `status` properties.
-       */
-      activityEvent: {
-        type: String,
-        attribute: 'activity-event' },
 
       /** Data unloaded/error state.
        */
@@ -137,22 +126,21 @@ class StreamedDataLoader extends PooledDataRequestMixin(LitElement) {
     return this.queueDataRequest({url: this.url, params})
       .then(response => ndjsonStream(response.body))
       .then(stream => {
-        let reader = stream.getReader(),
-            update, count
-        this._getResponseObject(reader)
-          .then(rslt => {
-            update = rslt.update
-            count = rslt.count
-            if (rslt.timestamps) Object.assign(this._timestamps, rslt.timestamps)
-            if (rslt.cutoff) this._cutoff = rslt.cutoff
+        let receivedData = false
+        this._getHeaderObject(stream)
+          .then(header => {
             this.state = this.state & ~errorStateBit
-            return this._processResponseObjects(reader)
+            if (header.timestamps) {
+              receivedData = true
+              Object.assign(this._timestamps, header.timestamps)
+              this._cutoff = header.cutoff
+              return this.processor(stream, header)
+            }
           })
-          .then(entities => {
+          .then(() => {
             this.releaseDataRequest()
             this._requestState = 'idle'
-            if (entities) {
-              this.processor(entities, update)
+            if (receivedData) {
               this.state = this.state & ~unloadedStateBit
               this.updateDataRequestActivity({activity: ''})
             }
@@ -173,24 +161,13 @@ class StreamedDataLoader extends PooledDataRequestMixin(LitElement) {
       })
   }
 
-  _getResponseObject(reader) {
-    return reader.read().then(rslt => rslt.value)
-  }
-
-  _processResponseObjects(reader) {
-    return new Promise((resolve, reject) => {
-      let entities = {}
-      const processObject = rslt => {
-        if (rslt.done)
-          resolve(entities)
-        else {
-          let [key, entity] = rslt.value
-          entities[key] = (entity == null) ? undefined : entity
-          return reader.read().then(processObject)
-        }
-      }
-      reader.read().then(processObject)
-    })
+  _getHeaderObject(stream) {
+    let reader = stream.getReader()
+    return reader.read()
+      .then(rslt => {
+        reader.releaseLock()
+        return rslt.value
+      })
   }
 
   updateDataRequestActivity(value) {
