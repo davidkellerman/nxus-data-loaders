@@ -53,7 +53,7 @@ class DeserializingEntityDataProcessor {
   constructor(container, property, options) {
     this._container = container
     this._property = property
-    this._config = {serialization: nullSerialization, key: property, ...options}
+    this._config = {serialization: nullSerialization, keyPrefix: property, ...options}
   }
 
   /** Data processing function for a stream of data entities.
@@ -97,10 +97,10 @@ class DeserializingEntityDataProcessor {
       let [key, entity] = value
       // determine id for entity; ignore entities with invalid coding
       let last, okay
-      if (this._config.key) {
+      if (this._config.keyPrefix) {
         let path = key.split('.'), first = path.shift()
         last = path.shift()
-        okay = (first === this._config.key) && last && (path.length === 0)
+        okay = (first === this._config.keyPrefix) && last && (path.length === 0)
       }
       else {
         last = key

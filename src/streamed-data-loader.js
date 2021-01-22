@@ -38,6 +38,11 @@ const errorStateBit = 2
  *     *   object - the data object itself; `null` if the response is an
  *         update and the object has been deleted
  *
+ * If the data service cannot serve the request in a timely fashion
+ * (such that there is a risk of the request timing out), it may return
+ * a "retry" response containing only a header object, with no `count`
+ * property. The loader detects this response and retries the request.
+ *
  * #### Data processing function
  *
  * The loader is configured with a `processor` function to store or
@@ -57,8 +62,7 @@ class StreamedDataLoader extends PooledDataRequestMixin(LitElement) {
   constructor() {
     super()
     this.url = ''
-    this.query = {}
-    this.activityEvent = 'activity-changed'
+    this.query = undefined
     this.state = unloadedStateBit
     this._requestState = 'idle' // idle, pending, active
     this._requestDelay = 0
@@ -130,7 +134,7 @@ class StreamedDataLoader extends PooledDataRequestMixin(LitElement) {
         this._getHeaderObject(stream)
           .then(header => {
             this.state = this.state & ~errorStateBit
-            if (header.timestamps) {
+            if (header.hasOwnProperty('count')) {
               receivedData = true
               Object.assign(this._timestamps, header.timestamps)
               this._cutoff = header.cutoff

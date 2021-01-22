@@ -51,12 +51,14 @@ const responseObjects = {
 }
 
 let fetchDataMockTimestamp = Date.now()
+let fetchDataMockKeyPrefixed = true
 async function fetchDataMock(url, options, request) {
   const headers = {'Content-Type': 'application/x-ndjson'}
   let body = JSON.parse(options.body),
-      timestamps = {test: fetchDataMockTimestamp}
+      timestamps = {test: fetchDataMockTimestamp},
+      keyPrefix = fetchDataMockKeyPrefixed ? 'test' : ''
   return new Response(
-    responseBody(responseObjects, {timestamps, cutoff: Date.now()}, 'test'),
+    responseBody(responseObjects, {timestamps, cutoff: Date.now()}, keyPrefix),
     {status: 200, statusText: 'OK', headers})
 }
 
@@ -64,8 +66,10 @@ function responseBody(objects, header, keyPrefix) {
   const encoder = new TextEncoder()
   const updatedAt = new Date(header.cutoff)
   let rows = [], index = 0
-  for (let [key, object] of Object.entries(objects))
-    rows.push([keyPrefix + '.' + key, {...object, createdAt: responseCreatedAt, updatedAt}])
+  for (let [key, object] of Object.entries(objects)) {
+    if (keyPrefix) key = keyPrefix + '.' + key
+    rows.push([key, {...object, createdAt: responseCreatedAt, updatedAt}])
+  }
   rows.unshift({count: rows.length, ...header})
   return new ReadableStream({
     pull(controller) {
@@ -88,11 +92,11 @@ class ResultPackage {
   }
 }
 class DataProcessorContext {
-  constructor() {
+  constructor(options) {
     this.results = []
     this.pendingResults = []
     this.processor = this._processor.bind(this)
-    this._dataProcessor = new DeserializingEntityDataProcessor(this, 'test')
+    this._dataProcessor = new DeserializingEntityDataProcessor(this, 'test', options)
   }
   nextResult() {
     let result = this.results.shift()
@@ -139,7 +143,6 @@ describe('streamed-data-loader element', () => {
       .post(dataURL, fetchDataMock)
       .catch(400)
     element = document.createElement('streamed-data-loader')
-    processorContext = new DataProcessorContext()
   })
 
   describe('load', () => {
@@ -155,7 +158,22 @@ describe('streamed-data-loader element', () => {
   })
 
   describe('data', () => {
-    it('should load data', async () => {
+    it('should load data with prefixed keys', async () => {
+      fetchDataMockKeyPrefixed = true
+      processorContext = new DataProcessorContext()
+      element.processor = processorContext.processor
+      document.body.appendChild(element)
+      let result = processorContext.nextResult(),
+          [objects, header] = await result.promise
+      expect(header.update).toBeFalsy()
+      expect(objects).toEqual(responseObjects)
+    })
+  })
+
+  describe('data', () => {
+    it('should load data with unprefixed keys', async () => {
+      fetchDataMockKeyPrefixed = false
+      processorContext = new DataProcessorContext({keyPrefix: ''})
       element.processor = processorContext.processor
       document.body.appendChild(element)
       let result = processorContext.nextResult(),
@@ -177,6 +195,7 @@ describe('updating-streamed-data-loader element', () => {
       .post(dataURL, fetchDataMock)
       .catch(400)
     element = document.createElement('updating-streamed-data-loader')
+    fetchDataMockKeyPrefixed = true
     processorContext = new DataProcessorContext()
   })
 
