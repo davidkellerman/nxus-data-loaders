@@ -38,7 +38,7 @@ Object.defineProperty(window, 'EventSource', {value: EventSourceMock})
 
 import fetchMock from 'fetch-mock/es5/client'
 
-import {DeserializingEntityDataProcessor} from './dist/index-webpack.js'
+import {DeserializingDataProcessor, DeserializingSingletonDataProcessor} from './dist/index-webpack.js'
 
 const dateRE = /^[0-9]{4}-[0-9]{2}-[0-9]{2}T[0-9]{1,2}:[0-9]{2}:[0-9]{2}(\.[0-9]{1,})?Z$/
 
@@ -92,11 +92,11 @@ class ResultPackage {
   }
 }
 class DataProcessorContext {
-  constructor(options) {
+  constructor(Processor, options) {
     this.results = []
     this.pendingResults = []
     this.processor = this._processor.bind(this)
-    this._dataProcessor = new DeserializingEntityDataProcessor(this, 'test', options)
+    this._dataProcessor = new Processor(this, 'test', options)
   }
   nextResult() {
     let result = this.results.shift()
@@ -160,7 +160,7 @@ describe('streamed-data-loader element', () => {
   describe('data', () => {
     it('should load data with prefixed keys', async () => {
       fetchDataMockKeyPrefixed = true
-      processorContext = new DataProcessorContext()
+      processorContext = new DataProcessorContext(DeserializingDataProcessor)
       element.processor = processorContext.processor
       document.body.appendChild(element)
       let result = processorContext.nextResult(),
@@ -168,18 +168,25 @@ describe('streamed-data-loader element', () => {
       expect(header.update).toBeFalsy()
       expect(objects).toEqual(responseObjects)
     })
-  })
-
-  describe('data', () => {
     it('should load data with unprefixed keys', async () => {
       fetchDataMockKeyPrefixed = false
-      processorContext = new DataProcessorContext({keyPrefix: ''})
+      processorContext = new DataProcessorContext(DeserializingDataProcessor, {keyPrefix: ''})
       element.processor = processorContext.processor
       document.body.appendChild(element)
       let result = processorContext.nextResult(),
           [objects, header] = await result.promise
       expect(header.update).toBeFalsy()
       expect(objects).toEqual(responseObjects)
+    })
+    it('should load singleton data', async () => {
+      fetchDataMockKeyPrefixed = true
+      processorContext = new DataProcessorContext(DeserializingSingletonDataProcessor)
+      element.processor = processorContext.processor
+      document.body.appendChild(element)
+      let result = processorContext.nextResult(),
+          [object, header] = await result.promise
+      expect(header.update).toBeFalsy()
+      expect(object).toEqual(responseObjects['1'])
     })
   })
 
@@ -195,8 +202,6 @@ describe('updating-streamed-data-loader element', () => {
       .post(dataURL, fetchDataMock)
       .catch(400)
     element = document.createElement('updating-streamed-data-loader')
-    fetchDataMockKeyPrefixed = true
-    processorContext = new DataProcessorContext()
   })
 
   describe('load', () => {
@@ -217,7 +222,8 @@ describe('updating-streamed-data-loader element', () => {
 
   describe('data', () => {
     it('should load data', async () => {
-jest.setTimeout(60000)
+      fetchDataMockKeyPrefixed = true
+      processorContext = new DataProcessorContext(DeserializingDataProcessor)
       element.processor = processorContext.processor
       document.body.appendChild(element)
       let result = processorContext.nextResult(),
@@ -236,7 +242,28 @@ jest.setTimeout(60000)
           [objects, header] = await result.promise
       expect(header.update).toBeFalsy()
       expect(objects).toEqual(responseObjects)
-
+    })
+    it('should load singleton data', async () => {
+      fetchDataMockKeyPrefixed = true
+      processorContext = new DataProcessorContext(DeserializingSingletonDataProcessor)
+      element.processor = processorContext.processor
+      document.body.appendChild(element)
+      let result = processorContext.nextResult(),
+          [object, header] = await result.promise
+      expect(header.update).toBeFalsy()
+      expect(object).toEqual(responseObjects['1'])
+    })
+    it('should reload singleton data in response to EventSource event', async () => {
+      let statusURL = new URL('/test/status', document.location),
+          src = eventSources[statusURL],
+          now = fetchDataMockTimestamp = Date.now(),
+          data = JSON.stringify({superseded: {test: now}}),
+          event = new MessageEvent('test/status', {data})
+      src.emit(event.type, event)
+      let result = processorContext.nextResult(),
+          [object, header] = await result.promise
+      expect(header.update).toBeFalsy()
+      expect(object).toEqual(responseObjects['1'])
     })
   })
 

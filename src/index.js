@@ -3,8 +3,9 @@ import {default as UpdatingStreamedDataLoader} from './updating-streamed-data-lo
 import {default as PooledDataRequestMixin} from './PooledDataRequestMixin.js'
 import {default as SharedEventSource} from './SharedEventSource.js'
 import {default as UpdatingDataLoaderMixin} from './UpdatingDataLoaderMixin.js'
-import {default as DeserializingEntityDataProcessor} from './DeserializingEntityDataProcessor.js'
+import {default as DeserializingDataProcessor} from './DeserializingDataProcessor.js'
+import {default as DeserializingSingletonDataProcessor} from './DeserializingSingletonDataProcessor.js'
 
 export {StreamedDataLoader, UpdatingStreamedDataLoader,
   PooledDataRequestMixin, SharedEventSource, UpdatingDataLoaderMixin,
-  DeserializingEntityDataProcessor}
+  DeserializingDataProcessor, DeserializingSingletonDataProcessor}

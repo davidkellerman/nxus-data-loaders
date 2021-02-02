@@ -48,7 +48,7 @@ const nullSerialization = {
  * *   `keyPrefix` (`String`) - key prefix for data entities; default
  *       is the `property` parameter
  */
-class DeserializingEntityDataProcessor {
+class DeserializingDataProcessor {
 
   constructor(container, property, options) {
     this._container = container
@@ -81,11 +81,9 @@ class DeserializingEntityDataProcessor {
     // get bucket holding entities;
     //   if replacing all existing entities (not an update),
     //   provisionally mark existing entities for destruction
-    let bucket = this._container[this._property],
+    let [bucket, changes] = this._getBucket(),
         toDestroy = new Set(),
-        toAdd = new Map(),
-        changes = false
-    if (!bucket) { bucket = {}; changes = true }
+        toAdd = new Map()
     for (let last in bucket)
       toDestroy.add(last)
 
@@ -152,10 +150,22 @@ class DeserializingEntityDataProcessor {
       for (let [last, entity] of toAdd) {
         bucket[last] = entity
       }
-      this._container[this._property] = Object.assign({}, bucket)
+      this._setBucket(bucket)
     }
+  }
+
+  // break out bucket get/set to allow subclasses to redefine them
+
+  _getBucket() {
+    let bucket = this._container[this._property],
+        changes = false
+    if (!bucket) { bucket = {}; changes = true }
+    return [bucket, changes]
+  }
+  _setBucket(bucket) {
+    this._container[this._property] = Object.assign({}, bucket)
   }
 
 }
 
-export {DeserializingEntityDataProcessor as default}
+export {DeserializingDataProcessor as default}

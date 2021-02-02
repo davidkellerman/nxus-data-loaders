@@ -2,18 +2,18 @@ toc:
   - name: Introduction
     namespace: introduction
     description: |
-        The Nxus Data Loaders package provides Web Components for
+        The Seabourne Data Loaders package provides Web Components for
         loading data from a network source.
   - name: License
     description: |
-        [MIT](https://github.com/seabourne/nxus-data-loaders/blob/master/LICENSE)
+        [MIT](https://github.com/seabourne/seabourne-wc-data-loaders/blob/master/LICENSE)
   - name: Elements
     description: |
         Two variants of streamed data loaders are provided:
         -   `<streamed-data-loader>` - data is organized as a stream of
             Newline-Delimited JSON (NDJSON) objects
         -   `<updating-streamed-data-loader>` - handles same data source
-            as `<streamed-data-loader>`,  updates data in response to
+            as `<streamed-data-loader>`, updates data in response to
             change events
     children:
       - StreamedDataLoader
@@ -26,7 +26,12 @@ toc:
         provides queueing of `fetch()` requests so as to limit the
         number of concurrently active requests. The
         `UpdatingDataLoaderMixin` triggers updates when data changes.
+        The `DeserializingDataProcessor` and
+        `DeserializingSingletonDataProcessor` are processors for loading
+        serialized data entities.
     children:
+      - DeserializingDataProcessor
+      - DeserializingSingletonDataProcessor
       - PooledDataRequestMixin
       - SharedEventSource
       - UpdatingDataLoaderMixin
