@@ -24,34 +24,29 @@ import SharedEventSource from './SharedEventSource.js'
  * *   `/api/entities:5dcb3cb3b427b70043dfb9bb` - status event name with
  *     a qualifying identifier
  *
+ * @param {Object} options - configuration options:
+ * *   `statusURL` **string** - URL of the status event source
+ * *   `statusEvent` **string** - status event name
  */
 const UpdatingDataLoaderMixin = dedupeMixin((base) => class extends base {
 
-  constructor() {
-    super()
-    this._boundStatusEventListener = this._statusEventListener.bind(this)
-  }
-
-  static get properties() {
-    return {
-      /** URL of status EventSource.
-       */
-      statusURL: {
-        type: String,
-        attribute: 'status-url' },
-      /* Status event.
-       */
-      statusEvent: {
-        type: String,
-        attribute: 'status-event' }
+  constructor(options) {
+    super(options)
+    if (this._config.statusURL && this._config.statusEvent) {
+      let url = new URL(this._config.statusURL, new URL(this._config.url, document.location)),
+          event = this._config.statusEvent
+      this._statusEventSource = new SharedEventSource(url)
+      this._boundStatusEventListener = this._statusEventListener.bind(this)
+      this._statusEventSource.addListener(event, this._boundStatusEventListener)
+      this._timestamps = {}
+      this._cutoff = 0
     }
   }
 
-  shouldUpdate(changedProperties) {
-    if (changedProperties.has('statusURL') || changedProperties.has('statusEvent'))
-      this._statusSourceChange()
-    super.shouldUpdate(changedProperties)
-    return false
+  destroy() {
+    delete this._statusEventData
+    this._removeStatusEventListener()
+    super.destroy()
   }
 
   _dataRequest() {
@@ -59,25 +54,16 @@ const UpdatingDataLoaderMixin = dedupeMixin((base) => class extends base {
       .then(() => { this._queueDataRequestIfChanges() })
   }
 
-  _statusSourceChange() {
-    if (this.__removeStatusEventListener) this.__removeStatusEventListener()
-    if (this.statusURL && this.statusEvent) {
-      let url = new URL(this.statusURL, new URL(this.url, document.location)),
-          source = new SharedEventSource(url),
-          event = this.statusEvent
-      source.addListener(event, this._boundStatusEventListener)
-      this.__removeStatusEventListener = () => {
-        source.removeListener(event, this._boundStatusEventListener)
-        this.__removeStatusEventListener = undefined
-      }
-      this._timestamps = {}
-      this._cutoff = 0
-    }
-  }
-
   _statusEventListener(e) {
     this._statusEventData = JSON.parse(e.data)
     this._queueDataRequestIfChanges()
+  }
+
+  _removeStatusEventListener() {
+    if (this._statusEventSource) {
+      let event = this._config.statusEvent
+      this._statusEventSource.removeListener(event, this._boundStatusEventListener)
+    }
   }
 
   _queueDataRequestIfChanges() {
@@ -99,4 +85,30 @@ const UpdatingDataLoaderMixin = dedupeMixin((base) => class extends base {
 
 })
 
-export {UpdatingDataLoaderMixin as default}
+
+const UpdatingDataLoaderElementMixin = dedupeMixin((base) => class extends base {
+
+  constructor() {
+    super()
+    this._statusURL = undefined
+    this._statusEvent = undefined
+  }
+
+  static get properties() {
+    return {
+      /** URL of status EventSource.
+       */
+      statusURL: {
+        type: String,
+        attribute: 'status-url' },
+      /* Status event.
+       */
+      statusEvent: {
+        type: String,
+        attribute: 'status-event' }
+    }
+  }
+
+})
+
+export {UpdatingDataLoaderMixin as default, UpdatingDataLoaderElementMixin}

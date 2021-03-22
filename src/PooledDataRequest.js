@@ -1,13 +1,12 @@
 'use strict'
 
-import {dedupeMixin} from '@open-wc/dedupe-mixin'
 import isEqual from 'lodash/isEqual'
 
 
 /* Pooled Fetch Requests.
  * Queues fetch() requests so as to limit the number of concurrently
- * active requests. Intended for use in browser contexts, where
- * sockets are a limited resource.
+ * active requests. Intended for use in browser contexts, where sockets
+ * are a limited resource.
  *
  * Requests are grouped into "pools," with an upper limit on active
  * requests for each pool (2 by default).
@@ -18,9 +17,7 @@ import isEqual from 'lodash/isEqual'
  * object.
  *
  * @private
- * @param {Element} context - HTML Element that incorporates the
- *   `PooledDataRequestMixin`; its `updateDataRequestActivity()` method
- *    is used to report request state changes
+ * @param {PooledDataRequests} context - request context
  * @param {Object} options - (optional) configuration options:
  * *   `url` - the url to which the request is sent
  * *   `params` - object sent as the request body
@@ -112,62 +109,42 @@ class PooledRequest {
 }
 
 
-/** Data request mixin.
- *
- * Coded as a mixin so that it can use the element context to dispatch
- * activity events. This also means it defers data requests until the
- * element is connected and cancels any active requests when
- * disconnected.
+/** Pooled Data Request context.
  *
  * #### Request activity state
  *
- * The mixin tracks request activity state. The state is updated when
- * the data request is queued for processing, when it becomes active,
- * and when it is released on completion. Client code may report other
- * state changes, such as intermediate activity states, using the
+ * Requests have an activity state. The state is updated when the data
+ * request is queued for processing, when it becomes active, and when it
+ * is released on completion. Client code may report other state
+ * changes, such as intermediate activity states, using the
  * `updateDataRequestActivity()` method.
  *
- * If configured with an `activityEvent`, the mixin will emit events to
- * indicate changes in activity state. The event type is specified by
- * `activityEvent`; the event `detail` property contains a `name`
- * subproperty set from the mixin `name`, and an `activity` subproperty
- * that indicates activity state. Client code may supply additional
- * subproperties.
+ * Request handling emits events to report changes in activity state.
+ * These `CustomEvent` instances have a `detail` property containing:
+ * *   `name` - request name
+ * *   `activity` - activity state.
+ * *   `...` - client code may supply additional subproperties
+ *
+ * @param {Object} options - configuration options:
+ * *   `name` **string** - request name for error and activity reporting
+ * *   `activityTarget` **Element** - target element for activity events
+ * *   `activityEvent` - `CustomEvent` name for activity reporting;
+ *     default is `activity-changed`
  *
  */
-const PooledDataRequestMixin = dedupeMixin((base) => class extends base {
+class PooledDataRequest {
 
-  constructor() {
-    super()
-    this.name = 'data-request'
-    this.activityEvent = 'activity-changed'
-    this.__dataRequest = undefined
-    this.__dataRequestActivity = undefined
+  constructor(options) {
+    this._config = {name: 'data-request', activityEvent: 'activity-changed', ...options}
+    this._dataRequest = undefined
+    this._dataRequestActivity = undefined
   }
 
-  static get properties() {
-    return {
-      /** Data request name (for display purposes).
-       */
-      name: {
-        type: String },
-      /** Event for reporting data request activity.
-       * The event `detail` will contain `name` and `status` properties.
-       */
-      activityEvent: {
-        type: String,
-        attribute: 'activity-event' }
+  destroy() {
+    if (this._dataRequest) {
+      this._dataRequest.cancel()
+      delete this._dataRequest
     }
-  }
-
-  connectedCallback() {
-    super.connectedCallback()
-    this._startDataRequest()
-  }
-
-  disconnectedCallback() {
-    super.disconnectedCallback()
-    if (this.__dataRequest) this.__dataRequest.cancel()
   }
 
   /** Queues a data request for processing.
@@ -182,8 +159,8 @@ const PooledDataRequestMixin = dedupeMixin((base) => class extends base {
    *   the request succeeds; or rejects with failure status
    */
   queueDataRequest(options) { // {url, params}
-    if (this.__dataRequest) throw new Error(`attempt to queue request when already active (${this.name || 'data'})`)
-    let request = this.__dataRequest = new PooledRequest(this, options)
+    if (this._dataRequest) throw new Error(`attempt to queue request when already active (${this._config.name})`)
+    let request = this._dataRequest = new PooledRequest(this, options)
     this._startDataRequest()
     return request.promise
   }
@@ -191,16 +168,16 @@ const PooledDataRequestMixin = dedupeMixin((base) => class extends base {
   /** Releases completed data request.
    */
   releaseDataRequest() {
-    if (this.__dataRequest) {
-      this.__dataRequest.dequeue()
+    if (this._dataRequest) {
+      this._dataRequest.dequeue()
       this.updateDataRequestActivity({})
-      this.__dataRequest = undefined
+      this._dataRequest = undefined
     }
   }
 
   _startDataRequest() {
-    if (this.__dataRequest && this.isConnected) {
-      let request = this.__dataRequest
+    let request = this._dataRequest
+    if (request) {
       request.promise.catch((error) => { this.releaseDataRequest() })
       request.enqueue()
     }
@@ -220,15 +197,17 @@ const PooledDataRequestMixin = dedupeMixin((base) => class extends base {
    *   if inactive
    */
   updateDataRequestActivity(value) {
-    if (!isEqual(value, this.__dataRequestActivity)) {
-      this.__dataRequestActivity = value
-      if (this.activityEvent)
-        this.dispatchEvent(new CustomEvent(this.activityEvent,
+    if (!isEqual(value, this._dataRequestActivity)) {
+      this._dataRequestActivity = value
+      if (this._config.activityTarget) {
+        let event = new CustomEvent(this._config.activityEvent,
           {bubbles: true, composed: true,
-            detail: {name: this.name || 'data', ...value}}))
+            detail: {name: this._config.name || 'data', ...value}})
+        this._config.activityTarget.dispatchEvent(event)
+      }
     }
   }
 
-})
+}
 
-export {PooledDataRequestMixin as default}
+export {PooledDataRequest as default}

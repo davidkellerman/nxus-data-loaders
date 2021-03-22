@@ -4,18 +4,22 @@
 
 import {LitElement} from 'lit-element'
 import ndjsonStream from "can-ndjson-stream"
+import pick from 'lodash/pick'
 
-import PooledDataRequestMixin from './PooledDataRequestMixin.js'
+import PooledDataRequest from './PooledDataRequest.js'
+import {sharedDataLoaders} from './SharedDataLoaders.js'
 
 const errorDelay = 60 * 1000
 
 const unloadedStateBit = 1
 const errorStateBit = 2
 
-/** Streamed Data Loader Element.
- *
- * This is organized as a "helper" element that handles the low-level
- * work of loading data from an AJAX data source.
+const nullSerialization = {
+  wrapEntity(entity, container) { return entity }
+}
+
+
+/** Streamed Data Loader.
  *
  * It doesn't maintain any local reference to the loaded data (in part
  * because the data may be large). Instead, it passes loaded data to a
@@ -56,54 +60,34 @@ const errorStateBit = 2
  *     NDJSON rows from the response)
  * *   `header` **Object** - the decoded header object from the response
  *
+ * @param {Object} options - configuration options:
+ * *   `name` **string** - name for error and activity reporting
+ * *   `url` **string** - data source URL
+ * *   `query` **Object** - query parameters for data request
+ * *   `serialization` **Object** - serialization object; should define
+ *     a `wrapEntity(entity)` method used to deserialize loaded data
+ *     objects
+ * *   `processor` **Function** - data processing function
+ * *   `activityTarget` **Element** - target element for activity events
+ * *   `activityEvent` - `CustomEvent` name for activity reporting
  */
-class StreamedDataLoader extends PooledDataRequestMixin(LitElement) {
+class StreamedDataLoader {
 
-  constructor() {
-    super()
-    this.url = ''
-    this.query = undefined
+  constructor(options) {
+    this._config = {query: {}, serialization: nullSerialization, ...options}
     this.state = unloadedStateBit
     this._requestState = 'idle' // idle, pending, active
     this._requestDelay = 0
     this._timestamps = {}
     this._cutoff = 0
+    this._pooledDataRequest = new PooledDataRequest(pick(this._config, ['name', 'activityTarget', 'activityEvent']))
+    this._delayedDataRequest(0)
   }
 
-  static get properties() {
-    return {
-      /** Data processor.
-       */
-      processor: {
-        type: Function },
-      /** URL of data source.
-       */
-      url: {
-        type: String },
-      /** Query parameters for data request.
-       */
-      query: {
-        type: Object },
-
-      /** Data unloaded/error state.
-       */
-      state: {
-        type: Number }
-    }
-  }
-
-  shouldUpdate(changedProperties) {
-    if (changedProperties.has('processor') || changedProperties.has('url') || changedProperties.has('query'))
-      this._dataSourceChange()
-    super.shouldUpdate(changedProperties)
-    return false
-  }
-
-  _dataSourceChange() {
-    if (this.processor && this.url && this.query) {
-      this._timestamps = {}
-      this._cutoff = 0
-      this._delayedDataRequest(0)
+  destroy() {
+    if (this._pooledDataRequest) {
+      this._pooledDataRequest.destroy()
+      delete this._pooledDataRequest
     }
   }
 
@@ -126,8 +110,8 @@ class StreamedDataLoader extends PooledDataRequestMixin(LitElement) {
 
   _dataRequest() {
     this._requestState = 'active'
-    let params = {...this.query, timestamps: this._timestamps, cutoff: this._cutoff}
-    return this.queueDataRequest({url: this.url, params})
+    let params = {...this._config.query, timestamps: this._timestamps, cutoff: this._cutoff}
+    return this._pooledDataRequest.queueDataRequest({url: this._config.url, params})
       .then(response => ndjsonStream(response.body))
       .then(stream => {
         let receivedData = false
@@ -138,29 +122,29 @@ class StreamedDataLoader extends PooledDataRequestMixin(LitElement) {
               receivedData = true
               Object.assign(this._timestamps, header.timestamps)
               this._cutoff = header.cutoff
-              return this.processor(stream, header)
+              return this._config.processor(stream, header)
             }
           })
           .then(() => {
-            this.releaseDataRequest()
+            this._pooledDataRequest.releaseDataRequest()
             this._requestState = 'idle'
             if (receivedData) {
               this.state = this.state & ~unloadedStateBit
-              this.updateDataRequestActivity({activity: ''})
+              this._pooledDataRequest.updateDataRequestActivity({activity: ''})
             }
             else {
               this.state |= unloadedStateBit
-              this.updateDataRequestActivity({activity: 'loading data'})
+              this._pooledDataRequest.updateDataRequestActivity({activity: 'loading data'})
               this._delayedDataRequest(0)
             }
           })
       })
       .catch(error => {
-        this.releaseDataRequest()
+        this._pooledDataRequest.releaseDataRequest()
         this._requestState = 'idle'
         console.log('streamed-data-loader data request failed: ' + error.message)
         this.state |= errorStateBit
-        this.updateDataRequestActivity({activity: ''})
+        this._pooledDataRequest.updateDataRequestActivity({activity: ''})
         this._delayedDataRequest(errorDelay)
       })
   }
@@ -189,6 +173,98 @@ class StreamedDataLoader extends PooledDataRequestMixin(LitElement) {
 
 }
 
-customElements.define('streamed-data-loader', StreamedDataLoader)
 
-export {StreamedDataLoader as default}
+/** Streamed Data Loader Element.
+ *
+ * This is organized as a "helper" element that handles the low-level
+ * work of loading data from an AJAX data source.
+ *
+ * The loader element attempts to share its data loader with other
+ * elements requiring a compatibly configured loader. (It uses the
+ * `SharedDataLoader` class to do this.) For this to work, the
+ * configuration options `name`, `url`, `query` and `activityEvent`
+ * must be the same.
+ */
+class StreamedDataLoaderElement extends LitElement {
+
+  constructor() {
+    super()
+    this.name = undefined
+    this.processor = undefined
+    this.url = undefined
+    this.query = undefined
+    this.activityEvent = undefined
+    this._loader = undefined
+  }
+
+  static get properties() {
+    return {
+      /** Name.
+       */
+      name: {
+        type: String },
+      /** Data processor.
+       */
+      processor: {
+        type: Function },
+      /** URL of data source.
+       */
+      url: {
+        type: String },
+      /** Query parameters for data request.
+       */
+      query: {
+        type: Object },
+      /** Activity event name.
+       */
+      activityEvent: {
+        type: String,
+        attribute: 'activity-event' },
+
+      /** Data unloaded/error state.
+       */
+      state: {
+        type: Number }
+    }
+  }
+
+  connectedCallback() {
+    super.connectedCallback()
+  }
+
+  disconnectedCallback() {
+    if (this._loader) {
+      let deref = sharedDataLoaders.dereferenceDataLoader(this._loader, this.processor)
+      delete this._loader
+      if (!deref) throw new Error(`could not dereference data loader (${this.name})`)
+    }
+    super.disconnectedCallback()
+  }
+
+  firstUpdated(changedProperties) {
+  }
+
+  shouldUpdate(changedProperties) {
+    this._shouldUpdateDataSource(changedProperties)
+    super.shouldUpdate(changedProperties)
+    return false
+  }
+
+  _shouldUpdateDataSource(changedProperties) {
+    if (changedProperties.has('name') || changedProperties.has('processor') ||
+        changedProperties.has('url') || changedProperties.has('query') ||
+        changedProperties.has('activityEvent')) {
+      if (this.processor && this.url && this.query) {
+        if (this._loader) throw new Error(`cannot reconfigure loader (${this.name})`)
+        let options = pick(this, ['name', 'url', 'query', 'activityEvent'])
+        this._loader = sharedDataLoaders.referenceDataLoader(
+          StreamedDataLoader, options, this.processor, this)
+      }
+    }
+  }
+
+}
+
+customElements.define('streamed-data-loader', StreamedDataLoaderElement)
+
+export {StreamedDataLoaderElement as default, StreamedDataLoader}
