@@ -23,7 +23,7 @@ class EventForwarder {
   dispatchEvent(event) {
     for (let target of this._spec.targets.keys()) {
       let e = new CustomEvent(event.type,
-          {bubbles: event.bubbles, cancelable: event.cancelable, composed: event.composed, detail: event.detail})
+        {bubbles: event.bubbles, cancelable: event.cancelable, composed: event.composed, detail: event.detail})
       target.dispatchEvent(e)
     }
   }
@@ -66,7 +66,8 @@ class SharedDataLoaders {
     let hash = objectHash(config),
         spec = loaders.get(hash)
     if (!spec) {
-      spec = {config, processors: new Set(), targets: new Map()}
+      spec = {config, processors: new Set(), targets: new Map(),
+        objects: new Map(), state: '', catchups: new Set() }
       spec.loader = new Subclass({...config,
         processor: this._sharedProcessor.bind(this, spec),
         activityTarget: new EventForwarder(spec) })
@@ -77,6 +78,10 @@ class SharedDataLoaders {
       let ref = spec.targets.get(target)
       if (!ref) spec.targets.set(target, ref = {count: 0})
       ref.count += 1
+    }
+    if (spec.state) {
+      spec.catchups.add(processor)
+      if (spec.state === 'loaded') this._delayedCatchup(spec)
     }
     return spec.loader
   }
@@ -116,6 +121,9 @@ class SharedDataLoaders {
   }
 
   async _sharedProcessor(spec, stream, header) {
+    spec.state = 'loading'
+    spec.header = header
+    if (!header.update) spec.objects.clear()
     let forwarders = []
     for (let processor of spec.processors) {
       let fwd = new StreamForwarder()
@@ -123,11 +131,45 @@ class SharedDataLoaders {
       processor(fwd.stream, header)
     }
     let reader = stream.getReader(), rslt
-    do {
+    for (;;) {
       rslt = await reader.read()
       for (let fwd of forwarders)
         fwd.forward(rslt)
-    } while (!rslt.done)
+      if (rslt.done) break
+      let [key, obj] = rslt.value
+      if (obj) spec.objects.set(key, obj); else delete spec.objects.delete(key)
+    }
+    spec.state = 'loaded'
+    if (spec.catchups.size > 0) this._delayedCatchup(spec)
+  }
+
+  _delayedCatchup(spec) {
+    spec._catchupId = setTimeout(() => {
+      delete spec._catchupId
+      if (spec.state === 'loaded') {
+console.log('YAY, CATCHUPS!')
+        this._catchupProcessor(spec)
+      }
+    }, 0)
+  }
+
+  _catchupProcessor(spec) {
+    let forwarders = []
+    for (let processor of spec.catchups) {
+      let fwd = new StreamForwarder()
+      forwarders.push(fwd)
+      processor(fwd.stream, spec.header)
+    }
+    spec.catchups.clear()
+    let rslt
+    for (let value of spec.objects) {
+      rslt = {done: false, value}
+      for (let fwd of forwarders)
+        fwd.forward(rslt)
+    }
+    rslt = {done: true}
+    for (let fwd of forwarders)
+      fwd.forward(rslt)
   }
 
 }
