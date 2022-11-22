@@ -84,8 +84,10 @@ class DeserializingDataProcessor {
     let [bucket, changes] = this._getBucket(),
         toDestroy = new Set(),
         toAdd = new Map()
-    for (let last in bucket)
-      toDestroy.add(last)
+    if (!header.update) {
+      for (let last in bucket)
+        toDestroy.add(last)
+    }
 
     // process entities, accumulate adds and destroys
     const reader = stream.getReader()
