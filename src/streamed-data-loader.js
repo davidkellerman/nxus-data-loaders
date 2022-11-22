@@ -140,12 +140,14 @@ class StreamedDataLoader {
           })
       })
       .catch(error => {
-        this._pooledDataRequest.releaseDataRequest()
-        this._requestState = 'idle'
-        console.log('streamed-data-loader data request failed: ' + error.message)
-        this.state |= errorStateBit
-        this._pooledDataRequest.updateDataRequestActivity({activity: ''})
-        this._delayedDataRequest(errorDelay)
+        if (this._pooledDataRequest) { // destroy() deletes _pooledDataRequest
+          this._pooledDataRequest.releaseDataRequest()
+          this._requestState = 'idle'
+          console.log('streamed-data-loader data request failed: ' + error.message)
+          this.state |= errorStateBit
+          this._pooledDataRequest.updateDataRequestActivity({activity: ''})
+          this._delayedDataRequest(errorDelay)
+        }
       })
   }
 
