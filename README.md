@@ -4,64 +4,74 @@
 
 ### Table of Contents
 
--   [Introduction](#introduction)
--   [License](#license)
--   [Elements](#elements)
-    -   [StreamedDataLoader](#streameddataloader)
-        -   [Response format](#response-format)
-        -   [Data processing function](#data-processing-function)
-    -   [UpdatingStreamedDataLoader](#updatingstreameddataloader)
--   [Support Classes](#support-classes)
-    -   [DeserializingDataProcessor](#deserializingdataprocessor)
-        -   [Parameters](#parameters)
-        -   [streamedDataProcessor](#streameddataprocessor)
-    -   [PooledDataRequestMixin](#pooleddatarequestmixin)
-        -   [Request activity state](#request-activity-state)
-    -   [SharedEventSource](#sharedeventsource)
-        -   [Parameters](#parameters-1)
-        -   [addListener](#addlistener)
-            -   [Parameters](#parameters-2)
-        -   [removeListener](#removelistener)
-            -   [Parameters](#parameters-3)
-    -   [UpdatingDataLoaderMixin](#updatingdataloadermixin)
--   [name](#name)
--   [activityEvent](#activityevent)
--   [processor](#processor)
--   [url](#url)
--   [query](#query)
--   [state](#state)
--   [statusURL](#statusurl)
+*   [Introduction](#introduction)
+*   [License](#license)
+*   [Elements](#elements)
+    *   [StreamedDataLoader](#streameddataloader)
+        *   [Response format](#response-format)
+        *   [Data processing function](#data-processing-function)
+        *   [Parameters](#parameters)
+    *   [UpdatingStreamedDataLoader](#updatingstreameddataloader)
+        *   [Parameters](#parameters-1)
+*   [Support Classes](#support-classes)
+    *   [DeserializingDataProcessor](#deserializingdataprocessor)
+        *   [Parameters](#parameters-2)
+        *   [streamedDataProcessor](#streameddataprocessor)
+    *   [DeserializingSingletonDataProcessor](#deserializingsingletondataprocessor)
+        *   [Parameters](#parameters-3)
+    *   [SharedEventSource](#sharedeventsource)
+        *   [Parameters](#parameters-4)
+        *   [addListener](#addlistener)
+            *   [Parameters](#parameters-5)
+        *   [removeListener](#removelistener)
+            *   [Parameters](#parameters-6)
+    *   [UpdatingDataLoaderMixin](#updatingdataloadermixin)
+        *   [Parameters](#parameters-7)
+*   [PooledDataRequest](#pooleddatarequest)
+    *   *   [Request activity state](#request-activity-state)
+    *   [Parameters](#parameters-8)
+    *   [queueDataRequest](#queuedatarequest)
+        *   [Parameters](#parameters-9)
+    *   [releaseDataRequest](#releasedatarequest)
+    *   [updateDataRequestActivity](#updatedatarequestactivity)
+        *   [Parameters](#parameters-10)
+*   [SharedDataLoaders](#shareddataloaders)
+    *   [referenceDataLoader](#referencedataloader)
+        *   [Parameters](#parameters-11)
+    *   [dereferenceDataLoader](#dereferencedataloader)
+        *   [Parameters](#parameters-12)
+*   [StreamedDataLoaderElement](#streameddataloaderelement)
+*   [name](#name)
+*   [processor](#processor)
+*   [url](#url)
+*   [query](#query)
+*   [activityEvent](#activityevent)
+*   [state](#state)
+*   [UpdatingStreamedDataLoaderElement](#updatingstreameddataloaderelement)
+*   [statusURL](#statusurl)
 
 ## Introduction
 
 The Seabourne Data Loaders package provides Web Components for
 loading data from a network source.
 
-
 ## License
 
 [MIT](https://github.com/seabourne/seabourne-wc-data-loaders/blob/master/LICENSE)
-
 
 ## Elements
 
 Two variants of streamed data loaders are provided:
 
--   `<streamed-data-loader>` - data is organized as a stream of
+*   `<streamed-data-loader>` - data is organized as a stream of
     Newline-Delimited JSON (NDJSON) objects
--   `<updating-streamed-data-loader>` - handles same data source
+*   `<updating-streamed-data-loader>` - handles same data source
     as `<streamed-data-loader>`, updates data in response to
     change events
 
-
 ### StreamedDataLoader
 
-**Extends PooledDataRequestMixin(LitElement)**
-
-Streamed Data Loader Element.
-
-This is organized as a "helper" element that handles the low-level
-work of loading data from an AJAX data source.
+Streamed Data Loader.
 
 It doesn't maintain any local reference to the loaded data (in part
 because the data may be large). Instead, it passes loaded data to a
@@ -72,17 +82,17 @@ data processing function to transform or store it.
 The response to the data request should consist of a sequence of
 NDJSON-encoded objects:
 
--   header object - contains these properties:
-    -   `count` **integer** - count of data objects
-    -   `update` **boolean** - (optional) if true, data objects in
+*   header object - contains these properties:
+    *   `count` **integer** - count of data objects
+    *   `update` **boolean** - (optional) if true, data objects in
         response update previously loaded data; otherwise, the data
         objects replace previously loaded data in its entirety
-    -   `timestamps` **object** - (optional) dependency timestamps
-    -   `cutoff` **integer** - (optional) cutoff timestamp
--   data objects - zero or more data objects; each is coded as a
+    *   `timestamps` **object** - (optional) dependency timestamps
+    *   `cutoff` **integer** - (optional) cutoff timestamp
+*   data objects - zero or more data objects; each is coded as a
     two-element array containing these entries:
-    -   key - object identifier
-    -   object - the data object itself; `null` if the response is an
+    *   key - object identifier
+    *   object - the data object itself; `null` if the response is an
         update and the object has been deleted
 
 If the data service cannot serve the request in a timely fashion
@@ -94,23 +104,37 @@ property. The loader detects this response and retries the request.
 
 The loader is configured with a `processor` function to store or
 otherwise transform the loaded data. It has the signature:
-    processor(objects, header)
+processor(objects, header)
 
 It is passed these parameters:
 
--   `objects` **ReadableStream** - a stream that returns the loaded
+*   `objects` **ReadableStream** - a stream that returns the loaded
     data objects; each object is a two-element array containing the
     object identifier and the object itself (that is, the decoded
     NDJSON rows from the response)
--   `header` **Object** - the decoded header object from the response
+*   `header` **Object** - the decoded header object from the response
+
+#### Parameters
+
+*   `options` **[Object](https://developer.mozilla.org/docs/Web/JavaScript/Reference/Global_Objects/Object)** configuration options:*   `name` **string** - name for error and activity reporting
+    *   `url` **string** - data source URL
+    *   `query` **Object** - query parameters for data request
+    *   `serialization` **Object** - serialization object; should define
+        a `wrapEntity(entity)` method used to deserialize loaded data
+        objects
+    *   `processor` **Function** - data processing function
+    *   `activityTarget` **Element** - target element for activity events
+    *   `activityEvent` - `CustomEvent` name for activity reporting
 
 ### UpdatingStreamedDataLoader
 
 **Extends StreamedDataLoader, UpdatingDataLoaderMixin**
 
-Updating Streamed Data Loader Element.
-Extends `StreamedDataLoader` with `UpdatingDataLoaderMixin` to
-provide a streamed data loader that responds to change events.
+Updating Streamed Data Loader.
+
+#### Parameters
+
+*   `options` &#x20;
 
 ## Support Classes
 
@@ -120,9 +144,9 @@ instances among multiple listeners. The `PooledDataRequestMixin`
 provides queueing of `fetch()` requests so as to limit the
 number of concurrently active requests. The
 `UpdatingDataLoaderMixin` triggers updates when data changes.
-The `DeserializingDataProcessor` is a processor for loading of
+The `DeserializingDataProcessor` and
+`DeserializingSingletonDataProcessor` are processors for loading
 serialized data entities.
-
 
 ### DeserializingDataProcessor
 
@@ -131,7 +155,7 @@ Provides data processing functions for entity data loading and
 editing elements. (Such as `<streamed-data-loader>`.)
 
 The processing function deserializes incoming entities and transfers
-them to storage. Storage is an associative array (called a _bucket_,
+them to storage. Storage is an associative array (called a *bucket*,
 for want of a better term), defined as a property of a container
 object.
 
@@ -160,14 +184,14 @@ invokes the entity's `destroy()` method, if one is defined.
 
 #### Parameters
 
--   `container` **[Object](https://developer.mozilla.org/docs/Web/JavaScript/Reference/Global_Objects/Object)** container element; the _bucket_ where
-      incoming entities are stored is a property of the container
--   `property` **[string](https://developer.mozilla.org/docs/Web/JavaScript/Reference/Global_Objects/String)** name of the container bucket property
--   `options` **[Object](https://developer.mozilla.org/docs/Web/JavaScript/Reference/Global_Objects/Object)** data processing options:-   `serialization` (`Object`) - entity serialization object;
-          provides a `wrapEntity(entity, context)` method for
-          deserializing incoming entities
-    -   `keyPrefix` (`String`) - key prefix for data entities; default
-          is the `property` parameter
+*   `container` **[Object](https://developer.mozilla.org/docs/Web/JavaScript/Reference/Global_Objects/Object)** container element; the *bucket* where
+    incoming entities are stored is a property of the container
+*   `property` **[string](https://developer.mozilla.org/docs/Web/JavaScript/Reference/Global_Objects/String)** name of the container bucket property
+*   `options` **[Object](https://developer.mozilla.org/docs/Web/JavaScript/Reference/Global_Objects/Object)** data processing options:*   `serialization` (`Object`) - entity serialization object;
+        provides a `wrapEntity(entity, context)` method for
+        deserializing incoming entities
+    *   `keyPrefix` (`String`) - key prefix for data entities; default
+        is the `property` parameter
 
 #### streamedDataProcessor
 
@@ -179,36 +203,25 @@ key and the entity itself.
 
 The data processing function takes these parameters:
 
--   `entities` **ReadableStream** - the data entity stream 
--   `header` **Object** - header object; properties:
-    -   `update` - if true, update the storage bucket; otherwise,
+*   `entities` **ReadableStream** - the data entity stream
+*   `header` **Object** - header object; properties:
+    *   `update` - if true, update the storage bucket; otherwise,
         replace its content in its entirety
 
 Returns **[Function](https://developer.mozilla.org/docs/Web/JavaScript/Reference/Statements/function)** data processor
 
-### PooledDataRequestMixin
+### DeserializingSingletonDataProcessor
 
-Data request mixin.
+**Extends DeserializingDataProcessor**
 
-Coded as a mixin so that it can use the element context to dispatch
-activity events. This also means it defers data requests until the
-element is connected and cancels any active requests when
-disconnected.
+Data processor for handling single serialized entity.
+Adapts the `DeserializingDataProcessor` to processing a data entity
+assigned to a single-valued container property (instead of a bucket
+containing multiple data entities).
 
-#### Request activity state
+#### Parameters
 
-The mixin tracks request activity state. The state is updated when
-the data request is queued for processing, when it becomes active,
-and when it is released on completion. Client code may report other
-state changes, such as intermediate activity states, using the
-`updateDataRequestActivity()` method.
-
-If configured with an `activityEvent`, the mixin will emit events to
-indicate changes in activity state. The event type is specified by
-`activityEvent`; the event `detail` property contains a `name`
-subproperty set from the mixin `name`, and an `activity` subproperty
-that indicates activity state. Client code may supply additional
-subproperties.
+*   `args` **...any**&#x20;
 
 ### SharedEventSource
 
@@ -216,8 +229,8 @@ Shared EventSource objects.
 
 #### Parameters
 
--   `url`  
--   `options`  
+*   `url` &#x20;
+*   `options` &#x20;
 
 #### addListener
 
@@ -225,8 +238,8 @@ Adds event listener, disallowing multiple listeners.
 
 ##### Parameters
 
--   `event` **[string](https://developer.mozilla.org/docs/Web/JavaScript/Reference/Global_Objects/String)** event name
--   `listener` **[Function](https://developer.mozilla.org/docs/Web/JavaScript/Reference/Statements/function)** event listener
+*   `event` **[string](https://developer.mozilla.org/docs/Web/JavaScript/Reference/Global_Objects/String)** event name
+*   `listener` **[Function](https://developer.mozilla.org/docs/Web/JavaScript/Reference/Statements/function)** event listener
 
 #### removeListener
 
@@ -234,8 +247,8 @@ Removes event listener.
 
 ##### Parameters
 
--   `event` **[string](https://developer.mozilla.org/docs/Web/JavaScript/Reference/Global_Objects/String)** event name
--   `listener` **[Function](https://developer.mozilla.org/docs/Web/JavaScript/Reference/Statements/function)** event listener
+*   `event` **[string](https://developer.mozilla.org/docs/Web/JavaScript/Reference/Global_Objects/String)** event name
+*   `listener` **[Function](https://developer.mozilla.org/docs/Web/JavaScript/Reference/Statements/function)** event listener
 
 ### UpdatingDataLoaderMixin
 
@@ -254,19 +267,142 @@ possibly with a distinguishing identifier appended.
 For example, a data source URL `https://data.site.org/api/entities`
 might produce:
 
--   `https://data.site.org/api/status` - status event source URL
--   `/api/entities` - status event name
--   `/api/entities:5dcb3cb3b427b70043dfb9bb` - status event name with
+*   `https://data.site.org/api/status` - status event source URL
+*   `/api/entities` - status event name
+*   `/api/entities:5dcb3cb3b427b70043dfb9bb` - status event name with
     a qualifying identifier
+
+#### Parameters
+
+*   `options` **[Object](https://developer.mozilla.org/docs/Web/JavaScript/Reference/Global_Objects/Object)** configuration options:*   `statusURL` **string** - URL of the status event source
+    *   `statusEvent` **string** - status event name
+
+## PooledDataRequest
+
+Pooled Data Request context.
+
+#### Request activity state
+
+Requests have an activity state. The state is updated when the data
+request is queued for processing, when it becomes active, and when it
+is released on completion. Client code may report other state
+changes, such as intermediate activity states, using the
+`updateDataRequestActivity()` method.
+
+Request handling emits events to report changes in activity state.
+These `CustomEvent` instances have a `detail` property containing:
+
+*   `name` - request name
+*   `activity` - activity state.
+*   `...` - client code may supply additional subproperties
+
+### Parameters
+
+*   `options` **[Object](https://developer.mozilla.org/docs/Web/JavaScript/Reference/Global_Objects/Object)** configuration options:*   `name` **string** - request name for error and activity reporting
+    *   `activityTarget` **Element** - target element for activity events
+    *   `activityEvent` - `CustomEvent` name for activity reporting;
+        default is `activity-changed`
+
+### queueDataRequest
+
+Queues a data request for processing.
+
+Currently, requests use the POST method, include credentials, and
+have a JSON-encoded body.
+
+#### Parameters
+
+*   `options` **[Object](https://developer.mozilla.org/docs/Web/JavaScript/Reference/Global_Objects/Object)** data request object; has these properties:*   `url` - the url to which the request is sent
+    *   `params` - object sent as the request body
+
+Returns **[Promise](https://developer.mozilla.org/docs/Web/JavaScript/Reference/Global_Objects/Promise)** resolves with the request response object when
+the request succeeds; or rejects with failure status
+
+### releaseDataRequest
+
+Releases completed data request.
+
+### updateDataRequestActivity
+
+Updates data request activity state.
+Dispatches an activity event (if `activityEvent` is defined).
+
+Activity state is updated when the data request is queued for
+processing, when it becomes active, and when it is released on
+completion. Client code may report other state changes, such as
+intermediate activity states.
+
+Override to implement other activity handling strategies.
+
+#### Parameters
+
+*   `value` **[Object](https://developer.mozilla.org/docs/Web/JavaScript/Reference/Global_Objects/Object)** object describing activity; undefined
+    if inactive
+
+## SharedDataLoaders
+
+Shared DataLoader objects.
+Rather than having multiple instances of identically configured data
+loaders, this class allows a single loader instance to be shared
+among multiple clients. The benefit being that data is loaded only
+once, then distributed to the multiple clients.
+
+A data loader is uniquely identified by:
+
+*   `DataLoader` subclass
+*   data source URL
+*   data request query parameters
+*   serialization object
+
+### referenceDataLoader
+
+Adds data loader reference.
+If shared data loader matching the required configuration is
+already defined, refer to it; otherwise, create a new shared data
+loader with the specified configuration.
+
+#### Parameters
+
+*   `Subclass` **Class** data loader subclass
+*   `config` **[Object](https://developer.mozilla.org/docs/Web/JavaScript/Reference/Global_Objects/Object)** data loader configuration (passed to the
+    data loader subclass constructor)
+*   `processor` **[Function](https://developer.mozilla.org/docs/Web/JavaScript/Reference/Statements/function)** data processor
+*   `target` **[Element](https://developer.mozilla.org/docs/Web/API/Element)** target element for activity events
+
+Returns **[Object](https://developer.mozilla.org/docs/Web/JavaScript/Reference/Global_Objects/Object)** data loader instance
+
+### dereferenceDataLoader
+
+Removes data loader reference.
+
+#### Parameters
+
+*   `loader` **[Object](https://developer.mozilla.org/docs/Web/JavaScript/Reference/Global_Objects/Object)** data loader instance (returned by
+    `referenceDataLoaders()`)
+*   `processor` **[Function](https://developer.mozilla.org/docs/Web/JavaScript/Reference/Statements/function)** data processor
+*   `target` **[Element](https://developer.mozilla.org/docs/Web/API/Element)** target element for activity events
+
+Returns **[boolean](https://developer.mozilla.org/docs/Web/JavaScript/Reference/Global_Objects/Boolean)** true if reference removed; false if no matching
+loader and reference were present
+
+## StreamedDataLoaderElement
+
+**Extends LitElement**
+
+Streamed Data Loader Element.
+
+This is organized as a "helper" element that handles the low-level
+work of loading data from an AJAX data source.
+
+The loader element attempts to share its data loader with other
+elements requiring a compatibly configured loader. (It uses the
+`SharedDataLoader` class to do this.) For this to work, the
+configuration options `name`, `url`, `query` and `activityEvent`
+must be the same.
 
 ## name
 
-Data request name (for display purposes).
-
-## activityEvent
-
-Event for reporting data request activity.
-The event `detail` will contain `name` and `status` properties.
+Name.
 
 ## processor
 
@@ -280,9 +416,21 @@ URL of data source.
 
 Query parameters for data request.
 
+## activityEvent
+
+Activity event name.
+
 ## state
 
 Data unloaded/error state.
+
+## UpdatingStreamedDataLoaderElement
+
+**Extends StreamedDataLoaderElement**
+
+Updating Streamed Data Loader Element.
+Extends `StreamedDataLoaderElement` to provide a streamed data loader
+that responds to change events.
 
 ## statusURL
 
