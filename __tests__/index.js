@@ -1,16 +1,15 @@
 /**
  * Notes on tests:
  * *   Uses Electron for test context.
- *     *   Tried to use `@jest-runner/electron`; it has more downloads
- *         and contributors than the alternate `jest-electron` package.
- *         However, couldn't get debugging to work in Electron
- *         environment. It ignores `debugger` statements placed in the
- *         code. Also, `console.log()` output isn't visible, nor are
- *         exceptions.
- *    *    Switched to `jest-electron`. It links agains an older version
- *         of Electron, but seems better behaved. Setting `DEBUG_MODE=1`
- *         provides a debugger console that's fairly functional.
- *         Also see https://github.com/hustcc/jest-electron/issues/33.
+ *     *   Tried to use `jest-electron` as test runner, because it
+ *         provided better debugging support and seemed better behaved
+ *         than `@jest-runner/electron`. Unfortunately, it doesn't
+ *         seem to be keeping up with new versions of electron or jest.
+ *     *   `@jest-runner/electron` is no longer active.
+ *     *   Switched to `@kayahr/jest-electron-runner`, which is a fork
+ *         of `@jest-runner/electron`. Seems to work, but doesn't
+ *         provide any sort of debugging support.
+ *         See https://github.com/kayahr/jest-electron-runner/issues/14
  *     *   `jsdom` really isn't a viable test context; there are simply
  *         too many gaps in its implementations of DOM APIs.
  * *   Uses webpack to bundle files in preparation for testing.
